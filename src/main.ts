@@ -1,22 +1,23 @@
 import * as THREE from 'three';
 import { GUI } from 'three/examples/jsm/libs/lil-gui.module.min.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-
+//Para Post Procesado
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
-
+//Los Shaders del post procesado y los del rasengan
 import vertexShader from './shaders/vertex.glsl?raw';
 import fragmentShader from './shaders/fragment.glsl?raw';
 import ppVertexShader from './shaders/pp_vertex.glsl?raw';
 import ppFragmentMotionBlur from './shaders/pp_frag_motionblur.glsl?raw';
 
+//Donde se cargara el shader
 interface ShaderDefinition {
     uniforms: Record<string, { value: any }>;
     vertexShader: string;
     fragmentShader: string;
 }
-
+//Para actualizar el efecto del shader
 interface Effect {
     pass: ShaderPass;
     name: string;
@@ -24,7 +25,7 @@ interface Effect {
     params?: Record<string, any>;
 }
 
-
+//Unico shader(Se uso la plantilla y por eso quedo asi)
 const motionBlurShader: ShaderDefinition = {
     uniforms: {
         tDiffuse: { value: null },
@@ -52,12 +53,12 @@ class App {
     private effects: Map<string, Effect> = new Map();
     private prevCameraMatrix = new THREE.Matrix4();
     private currentVelocity = new THREE.Vector2(0, 0);
-
+    //Parametros del Motion Blur
     private mbParams = {
         strength: 0.025,
         minThreshold: 0.0001 
     };
-
+    //Parametros del Rasengan
     private params = {  
         noiseVisible: true,
         noiseSpeed: 0.5,
@@ -94,7 +95,7 @@ class App {
         this.animate = this.animate.bind(this);
         this.onWindowResize = this.onWindowResize.bind(this);
 
-        
+        //Shader del Rasengan
         const count = this.params.density;
         this.geometry = new THREE.BufferGeometry();
         const pIds = new Float32Array(count);
@@ -143,7 +144,7 @@ class App {
         this.points = new THREE.Points(this.geometry, this.material);
         this.scene.add(this.points);
 
-        
+        //Iniciamos el Post Procesados
         this.setupPostProcessing();
         this.prevCameraMatrix.copy(this.camera.matrixWorld);
 
@@ -153,14 +154,14 @@ class App {
         window.addEventListener('resize', this.onWindowResize);
         this.animate();
     }
-
+    //Llamamos al Composser y agregamos el efecto del motion blur 
     private setupPostProcessing(): void {
         this.composer = new EffectComposer(this.renderer);
         this.composer.addPass(new RenderPass(this.scene, this.camera));
         this.addEffect('motionBlur', motionBlurShader, { uStrength: this.mbParams.strength }, true);
     }
 
-    
+    //Cargamos el vertex Shader en Shader Pass
     public addEffect(name: string, shaderDef: ShaderDefinition, params?: any, enabled = false): void {
         const material = new THREE.RawShaderMaterial({
             uniforms: THREE.UniformsUtils.clone(shaderDef.uniforms),
@@ -169,6 +170,7 @@ class App {
             glslVersion: THREE.GLSL3,
         });
         const pass = new ShaderPass(material);
+        //Para manejar los parametros del shader
         pass.enabled = enabled;
         if (params) {
             Object.entries(params).forEach(([k, v]) => { if (pass.uniforms[k]) pass.uniforms[k].value = v; });
@@ -176,7 +178,7 @@ class App {
         this.composer.addPass(pass);
         this.effects.set(name, { pass, name, enabled, params });
     }
-
+    //Actualiza los efecto del shader cada vez que se cambia los paramatros en el gui
     public updateEffectParam(name: string, paramName: string, value: any): void {
         const effect = this.effects.get(name);
         if (effect && effect.pass.uniforms[paramName]) {
@@ -197,13 +199,15 @@ class App {
         requestAnimationFrame(this.animate);
         const elapsedTime = (Date.now() - this.startTime) / 1000;
         
-        // 1. Lógica de Motion Blur (Velocidad de Cámara)
+        //Logica de Motion Blur(Simple)
+        //Tomamos el anterior frame y el actual para calcular una velocidad
+        //Esta velocidad se usara para definir el blur en el fragment
         this.camera.updateMatrixWorld();
         const currentPos = new THREE.Vector3().setFromMatrixPosition(this.camera.matrixWorld);
         const prevPos = new THREE.Vector3().setFromMatrixPosition(this.prevCameraMatrix);
         const deltaMove = new THREE.Vector3().subVectors(currentPos, prevPos);
         const speed = deltaMove.length();
-
+        //Detalles extra para hacer el motion blur un poco menos rudo
         if (speed > this.mbParams.minThreshold) {
             this.currentVelocity.set(deltaMove.x * 10.0, deltaMove.y * 10.0); // Multiplicador para notar el efecto
         } else {
@@ -215,7 +219,6 @@ class App {
 
         
         this.material.uniforms.u_time.value = elapsedTime;
-        this.points.rotation.y += 0.005;
         this.points.updateMatrixWorld();
         this.material.uniforms.modelMatrix.value.copy(this.points.matrixWorld);
         this.material.uniforms.viewMatrix.value.copy(this.camera.matrixWorldInverse);
